@@ -1,0 +1,17 @@
+# requirements.txt — Python dependencies
+# Install with: pip install -r requirements.txt
+#
+# We intentionally keep this minimal.
+# Add libraries here as you extend the project (e.g. langchain, chromadb).
+
+streamlit>=1.35.0      # Web UI framework
+requests>=2.31.0       # HTTP client for Ollama REST API
+
+# ── Optional future extensions (uncomment as needed) ──────────────────────────
+# langchain>=0.2.0           # LLM orchestration framework
+# langchain-community>=0.2.0 # Community integrations
+# chromadb>=0.5.0            # Local vector database for RAG
+# sentence-transformers>=3.0 # Local embedding models
+# pypdf>=4.0.0               # PDF text extraction
+# python-docx>=1.1.0         # Word document parsing
+# faiss-cpu>=1.8.0           # Alternative vector store
