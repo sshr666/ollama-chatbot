@@ -1,25 +1,16 @@
 """
-config/settings.py — Central configuration for the chatbot
-===========================================================
-Having a single place for all magic strings / numbers means you only
-need to change one file when, say, you add a new model or move Ollama
-to a remote server.
-
-Extend this later with:
-  - pydantic-settings for .env file support
-  - per-user config profiles
-  - RAG / vector DB connection strings
+config/settings.py — Central configuration (RAG edition)
+=========================================================
+Added RAG-specific settings below the existing ones.
+Existing values are UNCHANGED so nothing breaks.
 """
 
 
 class AppSettings:
     # ── Ollama connection ─────────────────────────────────────────────────────
-    # Ollama exposes a REST API on localhost:11434 by default.
-    # Change this if you're running Ollama on another machine.
     OLLAMA_BASE_URL: str = "http://localhost:11434"
 
     # ── Models ────────────────────────────────────────────────────────────────
-    # These must already be pulled locally: `ollama pull <model>`
     AVAILABLE_MODELS: list[str] = [
         "qwen3:8b",
         "llama3",
@@ -31,22 +22,46 @@ class AppSettings:
     DEFAULT_MODEL: str = "qwen3:8b"
 
     # ── Generation parameters ─────────────────────────────────────────────────
-    # These map 1-to-1 to Ollama's /api/chat options field.
-    DEFAULT_TEMPERATURE: float = 0.7   # 0 = deterministic, 1+ = creative
-    DEFAULT_TOP_P: float = 0.9         # nucleus sampling threshold
-    DEFAULT_MAX_TOKENS: int = 2048     # max tokens in a single reply
+    DEFAULT_TEMPERATURE: float = 0.7
+    DEFAULT_TOP_P: float = 0.9
+    DEFAULT_MAX_TOKENS: int = 2048
 
     # ── UI ────────────────────────────────────────────────────────────────────
     APP_TITLE: str = "Local AI Chat"
     APP_ICON: str = "🤖"
 
     # ── System prompt ─────────────────────────────────────────────────────────
-    # This is injected as the first "system" message in every conversation.
-    # You can make this editable from the sidebar later.
     DEFAULT_SYSTEM_PROMPT: str = (
         "You are a helpful, harmless, and honest AI assistant running entirely "
         "on the user's local machine. Be concise, clear, and friendly."
     )
 
+    # ── RAG system prompt (used instead of DEFAULT when RAG is active) ────────
+    # This is more directive — it tells the model to focus on the document.
+    RAG_SYSTEM_PROMPT: str = (
+        "You are a helpful document assistant. You answer questions based on "
+        "the provided document context. Be precise, cite chunk numbers when "
+        "relevant, and admit when information isn't in the document."
+    )
+
     # ── Timeouts ──────────────────────────────────────────────────────────────
-    REQUEST_TIMEOUT: int = 120  # seconds; increase for slow hardware / big models
+    REQUEST_TIMEOUT: int = 120
+
+    # ── RAG configuration ─────────────────────────────────────────────────────
+
+    # Where ChromaDB stores its vector database files on disk.
+    # The directory is created automatically if it doesn't exist.
+    CHROMA_PERSIST_DIR: str = "./chroma_db"
+
+    # How many chunks to retrieve for each user query.
+    # 4 is a good default: enough context, not too much prompt bloat.
+    # The sidebar exposes this as a slider (1–8).
+    RAG_TOP_K: int = 4
+
+    # Maximum PDF file size accepted (in MB).
+    # Larger PDFs take longer to embed on first upload.
+    MAX_PDF_SIZE_MB: int = 50
+
+    # Embedding model — runs locally via SentenceTransformers.
+    # Downloaded once (~90 MB) to ~/.cache/huggingface/
+    EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"

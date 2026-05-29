@@ -1,39 +1,45 @@
 """
-app.py — Main entry point for the Ollama Local AI Chatbot
-=========================================================
-This is the root file Streamlit runs. It wires together:
-  - The sidebar (model selector, settings)
-  - The chat UI (message history + input box)
-  - The Ollama streaming client
-  - Session state management (so history survives reruns)
+app.py — Main entry point for the Ollama Local AI Chatbot (RAG edition)
+=======================================================================
+Changes from v1:
+  - init_session_state() now bootstraps RAG-related state keys:
+      rag_enabled          : bool  — master toggle for RAG mode
+      rag_collection_name  : str   — which ChromaDB collection to query
+      rag_filename         : str   — display name of the active PDF
+      rag_chunk_count      : int   — how many chunks were indexed
 
-Architecture:
+Everything else (Streamlit config, sidebar, chat UI) is unchanged.
+The RAG logic itself lives entirely in utils/rag.py and is called
+from components/chat_ui.py — app.py stays thin.
+
+Architecture (RAG mode ON):
   User types message
        ↓
   Streamlit captures input (st.chat_input)
        ↓
-  app.py appends to session_state["messages"]
+  chat_ui._handle_user_message()
        ↓
-  ollama_client.stream_response() hits Ollama REST API
+  rag.retrieve_context(query, collection_name)   ← NEW
        ↓
-  Tokens arrive one-by-one → streamed into st.chat_message
+  rag.build_rag_prompt(query, chunks)            ← NEW
        ↓
-  Full reply saved back to session_state["messages"]
+  ollama_client.stream_response(augmented_prompt)
+       ↓
+  Tokens streamed into st.chat_message
+       ↓
+  Full reply saved to session_state["messages"]
 """
 
 import streamlit as st
 
-# ── Local module imports ──────────────────────────────────────────────────────
-# Each of these lives in a sub-folder so the project stays organised as it grows.
 from config.settings import AppSettings
 from utils.ollama_client import OllamaClient
 from components.sidebar import render_sidebar
 from components.chat_ui import render_chat_history, render_chat_input
 
 
-# ── Page config (must be the FIRST Streamlit call) ───────────────────────────
 st.set_page_config(
-    page_title="Local AI Chat",
+    page_title="Local AI Chat + RAG",
     page_icon="🤖",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -41,22 +47,16 @@ st.set_page_config(
 
 
 def init_session_state() -> None:
-    """
-    Bootstrap Streamlit session state on the very first run.
+    """Bootstrap all session state keys on first load."""
 
-    session_state persists across reruns (e.g. each message send) within a
-    single browser tab, but resets if the page is hard-refreshed.  This is
-    the lightweight "memory" that keeps the conversation alive.
-    """
+    # ── Core chat state (unchanged from v1) ───────────────────────────────────
     if "messages" not in st.session_state:
-        # Each message is a dict: {"role": "user"|"assistant", "content": "..."}
         st.session_state.messages = []
 
     if "selected_model" not in st.session_state:
         st.session_state.selected_model = AppSettings.DEFAULT_MODEL
 
     if "ollama_client" not in st.session_state:
-        # Instantiate once; reused for every message in the session.
         st.session_state.ollama_client = OllamaClient(
             base_url=AppSettings.OLLAMA_BASE_URL
         )
@@ -64,40 +64,55 @@ def init_session_state() -> None:
     if "system_prompt" not in st.session_state:
         st.session_state.system_prompt = AppSettings.DEFAULT_SYSTEM_PROMPT
 
+    # ── RAG state (new in v2) ─────────────────────────────────────────────────
+    # rag_enabled: when True, every user message goes through the RAG pipeline
+    # before being sent to Ollama.  The sidebar toggle controls this.
+    if "rag_enabled" not in st.session_state:
+        st.session_state.rag_enabled = False
+
+    # rag_collection_name: the ChromaDB collection for the active PDF.
+    # Set by sidebar.py after a PDF is uploaded and embedded.
+    if "rag_collection_name" not in st.session_state:
+        st.session_state.rag_collection_name = None
+
+    # rag_filename: shown in the UI so the user knows which PDF is active.
+    if "rag_filename" not in st.session_state:
+        st.session_state.rag_filename = None
+
+    # rag_chunk_count: shown in sidebar for transparency ("42 chunks indexed").
+    if "rag_chunk_count" not in st.session_state:
+        st.session_state.rag_chunk_count = 0
+
+    # rag_top_k: how many chunks to retrieve per query (sidebar slider controls this)
+    if "rag_top_k" not in st.session_state:
+        st.session_state.rag_top_k = AppSettings.RAG_TOP_K
+
 
 def main() -> None:
-    """
-    Application shell.
-
-    Streamlit re-runs this entire function from top to bottom every time:
-      • the user sends a message
-      • any widget changes value
-      • the page is first loaded
-    Session state is the glue that carries data between reruns.
-    """
+    """Application shell — thin orchestrator, no logic here."""
     init_session_state()
 
-    # ── Sidebar ───────────────────────────────────────────────────────────────
-    # render_sidebar() draws the left panel and returns whatever settings the
-    # user has picked.  We deliberately keep UI rendering separate from logic.
     render_sidebar()
 
-    # ── Page header ───────────────────────────────────────────────────────────
-    st.title("🤖 Local AI Chat")
-    st.caption(
-        f"Running **{st.session_state.selected_model}** locally via Ollama — "
-        "no data leaves your machine."
-    )
+    # ── Dynamic header ────────────────────────────────────────────────────────
+    if st.session_state.rag_enabled and st.session_state.rag_filename:
+        st.title("🤖 Local AI Chat  ·  📄 RAG Mode")
+        st.caption(
+            f"Model: **{st.session_state.selected_model}** via Ollama  ·  "
+            f"Document: **{st.session_state.rag_filename}**  ·  "
+            f"{st.session_state.rag_chunk_count} chunks indexed  ·  "
+            "100% local — no data leaves your machine."
+        )
+    else:
+        st.title("🤖 Local AI Chat")
+        st.caption(
+            f"Running **{st.session_state.selected_model}** locally via Ollama — "
+            "no data leaves your machine."
+        )
 
     st.divider()
 
-    # ── Chat history ─────────────────────────────────────────────────────────
-    # Renders all previous turns so the user sees the full conversation.
     render_chat_history()
-
-    # ── Chat input + response ─────────────────────────────────────────────────
-    # render_chat_input() blocks until the user submits a message, then drives
-    # the streaming response cycle.
     render_chat_input()
 
 

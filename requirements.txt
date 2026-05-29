@@ -1,17 +1,28 @@
-# requirements.txt — Python dependencies
+# requirements.txt — RAG edition
 # Install with: pip install -r requirements.txt
-#
-# We intentionally keep this minimal.
-# Add libraries here as you extend the project (e.g. langchain, chromadb).
 
-streamlit>=1.35.0      # Web UI framework
-requests>=2.31.0       # HTTP client for Ollama REST API
+# ── Core (unchanged from v1) ──────────────────────────────────────────────────
+streamlit>=1.35.0
+requests>=2.31.0
 
-# ── Optional future extensions (uncomment as needed) ──────────────────────────
-# langchain>=0.2.0           # LLM orchestration framework
-# langchain-community>=0.2.0 # Community integrations
-# chromadb>=0.5.0            # Local vector database for RAG
-# sentence-transformers>=3.0 # Local embedding models
-# pypdf>=4.0.0               # PDF text extraction
-# python-docx>=1.1.0         # Word document parsing
-# faiss-cpu>=1.8.0           # Alternative vector store
+# ── RAG stack (new in v2) ─────────────────────────────────────────────────────
+
+# PDF parsing — pure Python, no system dependencies needed
+pypdf>=4.0.0
+
+# Text chunking — only the text splitter is used, not the full LangChain stack
+# langchain-text-splitters is the lightweight package (no LLM dependencies)
+langchain-text-splitters>=0.2.0
+
+# Local embeddings — downloads all-MiniLM-L6-v2 (~90 MB) on first run
+# Runs on CPU, no GPU required
+sentence-transformers>=3.0.0
+
+# Local vector database — embedded (no server), persists to ./chroma_db/
+chromadb>=0.5.0
+
+# ── Transitive deps that sometimes need explicit pinning ──────────────────────
+# (uncomment if you hit version conflicts)
+# torch>=2.0.0          # needed by sentence-transformers; auto-installed
+# numpy>=1.24.0
+# huggingface-hub>=0.20.0
