@@ -152,13 +152,5 @@ Summarize the methodology section.
 
 ---
 
-## Future Improvements
-
-- Hybrid keyword + semantic retrieval
-- Multi-document querying
-- OCR for scanned PDFs
-- Citation-aware responses
-- Conversation memory
-- Web search integration
-
----
+## Future Improvements- Targets
+- Using FastAPI for API endpoints
